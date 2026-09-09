@@ -1,0 +1,19 @@
+{
+  "name": "comic-library-graphql",
+  "version": "1.0.0",
+  "description": "GraphQL API for Comic Library using Apollo Server 4, PostgreSQL/Neon, and Node.js",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "graphql": "^16.10.0",
+    "pg": "^8.16.3"
+  }
+}
