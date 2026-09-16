@@ -83,12 +83,22 @@ async function getKomikByIdInternal(id) {
   return mapKomik(result.rows[0]);
 }
 
+// Counter untuk Latihan Mandiri (N+1 Problem)
+let komikKategoriResolverCount = 0;
+let komikGenreResolverCount = 0;
+let kategoriKomiksResolverCount = 0;
+let genreKomiksResolverCount = 0;
+
 export const resolvers = {
   Query: {
     kategori: async () => {
+      kategoriKomiksResolverCount = 0;
+      console.log(`\n========================================`);
+      console.log(`[QUERY START] Memulai Query.kategori`);
       const result = await pool.query(
         'SELECT * FROM kategori ORDER BY id'
       );
+      console.log(`[QUERY] Mendapatkan ${result.rows.length} data kategori.`);
       return result.rows.map(mapKategori);
     },
 
@@ -101,9 +111,13 @@ export const resolvers = {
     },
 
     genre: async () => {
+      genreKomiksResolverCount = 0;
+      console.log(`\n========================================`);
+      console.log(`[QUERY START] Memulai Query.genre`);
       const result = await pool.query(
         'SELECT * FROM genre ORDER BY id'
       );
+      console.log(`[QUERY] Mendapatkan ${result.rows.length} data genre.`);
       return result.rows.map(mapGenre);
     },
 
@@ -115,10 +129,34 @@ export const resolvers = {
       return mapGenre(result.rows[0]);
     },
 
-    komiks: async () => {
-      const result = await pool.query(
-        'SELECT * FROM komik ORDER BY id'
-      );
+    komiks: async (_, { kategoriId, genreId }) => {
+      komikKategoriResolverCount = 0;
+      komikGenreResolverCount = 0;
+      console.log(`\n========================================`);
+      console.log(`[QUERY START] Memulai Query.komiks`);
+
+      let query = 'SELECT * FROM komik';
+      const params = [];
+      const conditions = [];
+
+      if (kategoriId != null) {
+        params.push(parseId(kategoriId, 'kategoriId'));
+        conditions.push(`kategori_id = $${params.length}`);
+      }
+
+      if (genreId != null) {
+        params.push(parseId(genreId, 'genreId'));
+        conditions.push(`genre_id = $${params.length}`);
+      }
+
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
+      }
+
+      query += ' ORDER BY id';
+
+      const result = await pool.query(query, params);
+      console.log(`[QUERY] Mendapatkan ${result.rows.length} data komik.`);
       return result.rows.map(mapKomik);
     },
 
@@ -150,6 +188,25 @@ export const resolvers = {
         }
         throw error;
       }
+    },
+
+    updateKategori: async (_, { id, input }) => {
+      const kategoriId = parseId(id);
+      const nama = input.nama_kategori ? input.nama_kategori.trim() : null;
+
+      const result = await pool.query(
+        `UPDATE kategori
+         SET nama_kategori = COALESCE($1, nama_kategori)
+         WHERE id = $2
+         RETURNING *`,
+        [nama, kategoriId]
+      );
+
+      if (result.rowCount === 0) {
+        throw new Error('Kategori tidak ditemukan.');
+      }
+
+      return mapKategori(result.rows[0]);
     },
 
     deleteKategori: async (_, { id }) => {
@@ -187,6 +244,25 @@ export const resolvers = {
         }
         throw error;
       }
+    },
+
+    updateGenre: async (_, { id, input }) => {
+      const genreId = parseId(id);
+      const nama = input.nama_genre ? input.nama_genre.trim() : null;
+
+      const result = await pool.query(
+        `UPDATE genre
+         SET nama_genre = COALESCE($1, nama_genre)
+         WHERE id = $2
+         RETURNING *`,
+        [nama, genreId]
+      );
+
+      if (result.rowCount === 0) {
+        throw new Error('Genre tidak ditemukan.');
+      }
+
+      return mapGenre(result.rows[0]);
     },
 
     deleteGenre: async (_, { id }) => {
@@ -323,6 +399,9 @@ export const resolvers = {
     kategori: async (parent) => {
       if (parent.kategori_id == null) return null;
 
+      komikKategoriResolverCount++;
+      console.log(`[COUNTER] Komik.kategori resolver dipanggil #${komikKategoriResolverCount} (Komik ID: ${parent.id})`);
+
       const result = await pool.query(
         'SELECT * FROM kategori WHERE id = $1',
         [Number(parent.kategori_id)]
@@ -333,6 +412,9 @@ export const resolvers = {
 
     genre: async (parent) => {
       if (parent.genre_id == null) return null;
+
+      komikGenreResolverCount++;
+      console.log(`[COUNTER] Komik.genre resolver dipanggil #${komikGenreResolverCount} (Komik ID: ${parent.id})`);
 
       const result = await pool.query(
         'SELECT * FROM genre WHERE id = $1',
@@ -345,6 +427,9 @@ export const resolvers = {
 
   Kategori: {
     komiks: async (parent) => {
+      kategoriKomiksResolverCount++;
+      console.log(`[COUNTER] Kategori.komiks resolver dipanggil #${kategoriKomiksResolverCount} (Kategori ID: ${parent.id})`);
+
       const result = await pool.query(
         'SELECT * FROM komik WHERE kategori_id = $1 ORDER BY id',
         [Number(parent.id)]
@@ -356,6 +441,9 @@ export const resolvers = {
 
   Genre: {
     komiks: async (parent) => {
+      genreKomiksResolverCount++;
+      console.log(`[COUNTER] Genre.komiks resolver dipanggil #${genreKomiksResolverCount} (Genre ID: ${parent.id})`);
+
       const result = await pool.query(
         'SELECT * FROM komik WHERE genre_id = $1 ORDER BY id',
         [Number(parent.id)]

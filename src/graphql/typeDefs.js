@@ -49,6 +49,14 @@ export const typeDefs = `#graphql
     nama_genre: String!
   }
 
+  input UpdateKategoriInput {
+    nama_kategori: String
+  }
+
+  input UpdateGenreInput {
+    nama_genre: String
+  }
+
   input CreateKomikInput {
     judul: String!
     kategori_id: ID
@@ -74,15 +82,17 @@ export const typeDefs = `#graphql
     genre: [Genre!]!
     genreById(id: ID!): Genre
 
-    komiks: [Komik!]!
+    komiks(kategoriId: ID, genreId: ID): [Komik!]!
     komikById(id: ID!): Komik
   }
 
   type Mutation {
     createKategori(input: CreateKategoriInput!): Kategori!
+    updateKategori(id: ID!, input: UpdateKategoriInput!): Kategori!
     deleteKategori(id: ID!): Boolean!
 
     createGenre(input: CreateGenreInput!): Genre!
+    updateGenre(id: ID!, input: UpdateGenreInput!): Genre!
     deleteGenre(id: ID!): Boolean!
 
     createKomik(input: CreateKomikInput!): Komik!
