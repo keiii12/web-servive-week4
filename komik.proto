@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package komiklib;
+
+// Message untuk mewakili entitas Komik (sesuai schema lab 04-05)
+message Komik {
+  int32 id = 1;
+  string judul = 2;
+  int32 kategori_id = 3;
+  int32 genre_id = 4;
+  string reading_status = 5;
+  string komik_status = 6;
+  float rating = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+
+// Message request untuk mengambil 1 komik berdasarkan ID
+message GetKomikRequest {
+  int32 id = 1;
+}
+
+// Message response untuk mengembalikan 1 data komik
+message GetKomikResponse {
+  Komik komik = 1;
+}
+
+// Message request kosong untuk mengambil semua data komik
+message EmptyRequest {
+}
+
+// Message response untuk mengembalikan daftar seluruh komik
+message ListKomikResponse {
+  repeated Komik komiks = 1;
+}
+
+// Service gRPC untuk mengelola entitas Komik
+service KomikService {
+  // Method 1: Mengambil data komik berdasarkan ID
+  rpc GetKomikById (GetKomikRequest) returns (GetKomikResponse);
+
+  // Method 2: Mengambil seluruh data komik
+  rpc GetAllKomik (EmptyRequest) returns (ListKomikResponse);
+}
