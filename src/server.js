@@ -74,8 +74,10 @@ await startGrpcServer(grpcPort);
 // 3. Jalankan TCP Multiplexer di PORT utama (Render/Local)
 const mainServer = net.createServer((socket) => {
   socket.once('data', (buf) => {
-    // Header HTTP/2 gRPC dimulai dengan kata 'PRI'
-    const isGrpc = buf.toString('utf8', 0, 3) === 'PRI';
+    const rawHeader = buf.toString('utf8', 0, 100);
+    console.log('[Multiplexer Header]:', JSON.stringify(rawHeader));
+
+    const isGrpc = buf.toString('utf8', 0, 3) === 'PRI' || rawHeader.includes('komiklib.');
     const targetPort = isGrpc ? grpcPort : expressPort;
 
     const proxy = net.connect(targetPort, '127.0.0.1', () => {
