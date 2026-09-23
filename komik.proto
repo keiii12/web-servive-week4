@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package komiklib;
 
-// Message untuk mewakili entitas Komik (sesuai schema lab 04-05)
+// Message entitas Komik
 message Komik {
   int32 id = 1;
   string judul = 2;
@@ -15,30 +15,57 @@ message Komik {
   string updated_at = 9;
 }
 
-// Message request untuk mengambil 1 komik berdasarkan ID
+// Request & Response Read
 message GetKomikRequest {
   int32 id = 1;
 }
 
-// Message response untuk mengembalikan 1 data komik
 message GetKomikResponse {
   Komik komik = 1;
 }
 
-// Message request kosong untuk mengambil semua data komik
 message EmptyRequest {
 }
 
-// Message response untuk mengembalikan daftar seluruh komik
 message ListKomikResponse {
   repeated Komik komiks = 1;
 }
 
-// Service gRPC untuk mengelola entitas Komik
-service KomikService {
-  // Method 1: Mengambil data komik berdasarkan ID
-  rpc GetKomikById (GetKomikRequest) returns (GetKomikResponse);
+// Request Create
+message CreateKomikRequest {
+  string judul = 1;
+  int32 kategori_id = 2;
+  int32 genre_id = 3;
+  string reading_status = 4;
+  string komik_status = 5;
+  float rating = 6;
+}
 
-  // Method 2: Mengambil seluruh data komik
+// Request Update
+message UpdateKomikRequest {
+  int32 id = 1;
+  string judul = 2;
+  int32 kategori_id = 3;
+  int32 genre_id = 4;
+  string reading_status = 5;
+  string komik_status = 6;
+  float rating = 7;
+}
+
+// Request & Response Delete
+message DeleteKomikRequest {
+  int32 id = 1;
+}
+
+message DeleteKomikResponse {
+  bool success = 1;
+}
+
+// Service gRPC Lengkap (CRUD)
+service KomikService {
+  rpc GetKomikById (GetKomikRequest) returns (GetKomikResponse);
   rpc GetAllKomik (EmptyRequest) returns (ListKomikResponse);
+  rpc CreateKomik (CreateKomikRequest) returns (GetKomikResponse);
+  rpc UpdateKomik (UpdateKomikRequest) returns (GetKomikResponse);
+  rpc DeleteKomik (DeleteKomikRequest) returns (DeleteKomikResponse);
 }
