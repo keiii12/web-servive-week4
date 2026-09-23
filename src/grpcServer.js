@@ -34,7 +34,7 @@ function mapKomikToProto(row) {
   };
 }
 
-export function startGrpcServer(customPort) {
+export async function startGrpcServer(port = 50051) {
   const server = new grpc.Server();
 
   server.addService(komikProto.KomikService.service, {
@@ -151,28 +151,28 @@ export function startGrpcServer(customPort) {
     }
   });
 
-  const port = customPort || Number(process.env.PORT) || Number(process.env.GRPC_PORT) || 50051;
-  const host = '0.0.0.0';
+  const host = '127.0.0.1';
 
-  testDatabaseConnection().then(() => {
+  await testDatabaseConnection();
+
+  await new Promise((resolve, reject) => {
     server.bindAsync(
       `${host}:${port}`,
       grpc.ServerCredentials.createInsecure(),
       (error, boundPort) => {
         if (error) {
           console.error('❌ Gagal menjalankan gRPC Server:', error);
-          return;
+          return reject(error);
         }
-        console.log(`🚀 gRPC Server ready on port ${boundPort}`);
+        console.log(`🚀 gRPC Server ready at 127.0.0.1:${boundPort}`);
+        resolve(boundPort);
       }
     );
-  }).catch((err) => {
-    console.error('❌ Database connection error:', err);
   });
 
   return server;
 }
 
 if (process.argv[1] && process.argv[1].endsWith('grpcServer.js')) {
-  startGrpcServer();
+  await startGrpcServer(Number(process.env.GRPC_PORT) || 50051);
 }
