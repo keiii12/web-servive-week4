@@ -34,147 +34,145 @@ function mapKomikToProto(row) {
   };
 }
 
-const server = new grpc.Server();
+export function startGrpcServer(customPort) {
+  const server = new grpc.Server();
 
-server.addService(komikProto.KomikService.service, {
-  GetKomikById: async (call, callback) => {
-    try {
-      const id = Number(call.request.id);
-      console.log(`[gRPC] GetKomikById ID: ${id}`);
-
-      const result = await pool.query('SELECT * FROM komik WHERE id = $1', [id]);
-      if (result.rows.length === 0) {
-        return callback({
-          code: grpc.status.NOT_FOUND,
-          details: `Komik dengan ID ${id} tidak ditemukan.`
-        });
+  server.addService(komikProto.KomikService.service, {
+    GetKomikById: async (call, callback) => {
+      try {
+        const id = Number(call.request.id);
+        console.log(`[gRPC] GetKomikById ID: ${id}`);
+        const result = await pool.query('SELECT * FROM komik WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+          return callback({
+            code: grpc.status.NOT_FOUND,
+            details: `Komik dengan ID ${id} tidak ditemukan.`
+          });
+        }
+        callback(null, { komik: mapKomikToProto(result.rows[0]) });
+      } catch (error) {
+        console.error('[gRPC Error] GetKomikById:', error);
+        callback({ code: grpc.status.INTERNAL, details: error.message });
       }
+    },
 
-      callback(null, { komik: mapKomikToProto(result.rows[0]) });
-    } catch (error) {
-      console.error('[gRPC Error] GetKomikById:', error);
-      callback({ code: grpc.status.INTERNAL, details: error.message });
-    }
-  },
-
-  GetAllKomik: async (_call, callback) => {
-    try {
-      console.log('[gRPC] GetAllKomik');
-      const result = await pool.query('SELECT * FROM komik ORDER BY id');
-      callback(null, { komiks: result.rows.map(mapKomikToProto) });
-    } catch (error) {
-      console.error('[gRPC Error] GetAllKomik:', error);
-      callback({ code: grpc.status.INTERNAL, details: error.message });
-    }
-  },
-
-  CreateKomik: async (call, callback) => {
-    try {
-      const { judul, kategori_id, genre_id, reading_status, komik_status, rating } = call.request;
-      console.log(`[gRPC] CreateKomik: ${judul}`);
-
-      const result = await pool.query(
-        `INSERT INTO komik (judul, kategori_id, genre_id, reading_status, komik_status, rating)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
-        [
-          judul ? judul.trim() : 'Komik Baru',
-          kategori_id || null,
-          genre_id || null,
-          reading_status || 'Reading',
-          komik_status || 'On Going',
-          rating || 0
-        ]
-      );
-
-      callback(null, { komik: mapKomikToProto(result.rows[0]) });
-    } catch (error) {
-      console.error('[gRPC Error] CreateKomik:', error);
-      callback({ code: grpc.status.INTERNAL, details: error.message });
-    }
-  },
-
-  UpdateKomik: async (call, callback) => {
-    try {
-      const { id, judul, kategori_id, genre_id, reading_status, komik_status, rating } = call.request;
-      const komikId = Number(id);
-      console.log(`[gRPC] UpdateKomik ID: ${komikId}`);
-
-      const existing = await pool.query('SELECT * FROM komik WHERE id = $1', [komikId]);
-      if (existing.rows.length === 0) {
-        return callback({
-          code: grpc.status.NOT_FOUND,
-          details: `Komik dengan ID ${komikId} tidak ditemukan.`
-        });
+    GetAllKomik: async (_call, callback) => {
+      try {
+        console.log('[gRPC] GetAllKomik');
+        const result = await pool.query('SELECT * FROM komik ORDER BY id');
+        callback(null, { komiks: result.rows.map(mapKomikToProto) });
+      } catch (error) {
+        console.error('[gRPC Error] GetAllKomik:', error);
+        callback({ code: grpc.status.INTERNAL, details: error.message });
       }
+    },
 
-      const row = existing.rows[0];
-      const result = await pool.query(
-        `UPDATE komik
-         SET judul = $1,
-             kategori_id = $2,
-             genre_id = $3,
-             reading_status = $4,
-             komik_status = $5,
-             rating = $6,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $7
-         RETURNING *`,
-        [
-          judul ? judul.trim() : row.judul,
-          kategori_id || row.kategori_id,
-          genre_id || row.genre_id,
-          reading_status || row.reading_status,
-          komik_status || row.komik_status,
-          rating != null ? rating : row.rating,
-          komikId
-        ]
-      );
-
-      callback(null, { komik: mapKomikToProto(result.rows[0]) });
-    } catch (error) {
-      console.error('[gRPC Error] UpdateKomik:', error);
-      callback({ code: grpc.status.INTERNAL, details: error.message });
-    }
-  },
-
-  DeleteKomik: async (call, callback) => {
-    try {
-      const id = Number(call.request.id);
-      console.log(`[gRPC] DeleteKomik ID: ${id}`);
-
-      const result = await pool.query('DELETE FROM komik WHERE id = $1 RETURNING id', [id]);
-      if (result.rowCount === 0) {
-        return callback({
-          code: grpc.status.NOT_FOUND,
-          details: `Komik dengan ID ${id} tidak ditemukan.`
-        });
+    CreateKomik: async (call, callback) => {
+      try {
+        const { judul, kategori_id, genre_id, reading_status, komik_status, rating } = call.request;
+        console.log(`[gRPC] CreateKomik: ${judul}`);
+        const result = await pool.query(
+          `INSERT INTO komik (judul, kategori_id, genre_id, reading_status, komik_status, rating)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [
+            judul ? judul.trim() : 'Komik Baru',
+            kategori_id || null,
+            genre_id || null,
+            reading_status || 'Reading',
+            komik_status || 'On Going',
+            rating || 0
+          ]
+        );
+        callback(null, { komik: mapKomikToProto(result.rows[0]) });
+      } catch (error) {
+        console.error('[gRPC Error] CreateKomik:', error);
+        callback({ code: grpc.status.INTERNAL, details: error.message });
       }
+    },
 
-      callback(null, { success: true });
-    } catch (error) {
-      console.error('[gRPC Error] DeleteKomik:', error);
-      callback({ code: grpc.status.INTERNAL, details: error.message });
-    }
-  }
-});
-
-const port = process.env.GRPC_PORT || 50051;
-const host = '0.0.0.0';
-
-try {
-  await testDatabaseConnection();
-  server.bindAsync(
-    `${host}:${port}`,
-    grpc.ServerCredentials.createInsecure(),
-    (error, boundPort) => {
-      if (error) {
-        console.error('❌ Gagal menjalankan gRPC Server:', error);
-        return;
+    UpdateKomik: async (call, callback) => {
+      try {
+        const { id, judul, kategori_id, genre_id, reading_status, komik_status, rating } = call.request;
+        const komikId = Number(id);
+        console.log(`[gRPC] UpdateKomik ID: ${komikId}`);
+        const existing = await pool.query('SELECT * FROM komik WHERE id = $1', [komikId]);
+        if (existing.rows.length === 0) {
+          return callback({
+            code: grpc.status.NOT_FOUND,
+            details: `Komik dengan ID ${komikId} tidak ditemukan.`
+          });
+        }
+        const row = existing.rows[0];
+        const result = await pool.query(
+          `UPDATE komik
+           SET judul = $1,
+               kategori_id = $2,
+               genre_id = $3,
+               reading_status = $4,
+               komik_status = $5,
+               rating = $6,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $7
+           RETURNING *`,
+          [
+            judul ? judul.trim() : row.judul,
+            kategori_id || row.kategori_id,
+            genre_id || row.genre_id,
+            reading_status || row.reading_status,
+            komik_status || row.komik_status,
+            rating != null ? rating : row.rating,
+            komikId
+          ]
+        );
+        callback(null, { komik: mapKomikToProto(result.rows[0]) });
+      } catch (error) {
+        console.error('[gRPC Error] UpdateKomik:', error);
+        callback({ code: grpc.status.INTERNAL, details: error.message });
       }
-      console.log(`🚀 Full CRUD gRPC Server ready at http://${host}:${boundPort}`);
+    },
+
+    DeleteKomik: async (call, callback) => {
+      try {
+        const id = Number(call.request.id);
+        console.log(`[gRPC] DeleteKomik ID: ${id}`);
+        const result = await pool.query('DELETE FROM komik WHERE id = $1 RETURNING id', [id]);
+        if (result.rowCount === 0) {
+          return callback({
+            code: grpc.status.NOT_FOUND,
+            details: `Komik dengan ID ${id} tidak ditemukan.`
+          });
+        }
+        callback(null, { success: true });
+      } catch (error) {
+        console.error('[gRPC Error] DeleteKomik:', error);
+        callback({ code: grpc.status.INTERNAL, details: error.message });
+      }
     }
-  );
-} catch (err) {
-  console.error('❌ Gagal terhubung ke database:', err);
+  });
+
+  const port = customPort || Number(process.env.PORT) || Number(process.env.GRPC_PORT) || 50051;
+  const host = '0.0.0.0';
+
+  testDatabaseConnection().then(() => {
+    server.bindAsync(
+      `${host}:${port}`,
+      grpc.ServerCredentials.createInsecure(),
+      (error, boundPort) => {
+        if (error) {
+          console.error('❌ Gagal menjalankan gRPC Server:', error);
+          return;
+        }
+        console.log(`🚀 gRPC Server ready on port ${boundPort}`);
+      }
+    );
+  }).catch((err) => {
+    console.error('❌ Database connection error:', err);
+  });
+
+  return server;
+}
+
+if (process.argv[1] && process.argv[1].endsWith('grpcServer.js')) {
+  startGrpcServer();
 }
