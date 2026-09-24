@@ -276,7 +276,9 @@ await startGrpcServer(grpcPort);
 // 3. Jalankan TCP Multiplexer di PORT utama (Render/Local)
 const mainServer = net.createServer((socket) => {
   socket.once('data', (buf) => {
-    const isNativeGrpc = buf.toString('utf8', 0, 3) === 'PRI';
+    const isNativeGrpc = buf.toString('utf8', 0, 3) === 'PRI' ||
+                         buf.includes(Buffer.from('application/grpc')) ||
+                         buf.includes(Buffer.from('grpc-web'));
     const targetPort = isNativeGrpc ? grpcPort : expressPort;
 
     const proxy = net.connect(targetPort, '127.0.0.1', () => {

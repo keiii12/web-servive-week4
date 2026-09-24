@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
+import { ReflectionService } from '@grpc/reflection';
 import { pool, testDatabaseConnection } from './config/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,6 +37,9 @@ function mapKomikToProto(row) {
 
 export async function startGrpcServer(port = 50051) {
   const server = new grpc.Server();
+
+  const reflection = new ReflectionService(packageDefinition);
+  reflection.addToServer(server);
 
   server.addService(komikProto.KomikService.service, {
     GetKomikById: async (call, callback) => {
