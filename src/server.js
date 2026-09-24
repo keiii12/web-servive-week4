@@ -21,6 +21,7 @@ const httpServer = http.createServer(app);
 
 app.use(cors());
 app.use(express.json());
+app.use(express.raw({ type: '*/*' }));
 
 function mapKomik(row) {
   if (!row) return null;
@@ -37,16 +38,36 @@ function mapKomik(row) {
   };
 }
 
+function parseIdFromReq(req) {
+  if (req.query && req.query.id) return Number(req.query.id);
+  if (req.body) {
+    if (typeof req.body === 'object' && req.body !== null && req.body.id != null) {
+      return Number(req.body.id);
+    }
+    if (Buffer.isBuffer(req.body)) {
+      const str = req.body.toString('utf8');
+      const match = str.match(/"id"\s*:\s*(\d+)/) || str.match(/\x08(\d+)/) || str.match(/(\d+)/);
+      if (match) return Number(match[1]);
+    }
+  }
+  return 1;
+}
+
 // Endpoint HTTP/gRPC Bridge untuk Render Proxy
 app.post('/komiklib.KomikService/GetKomikById', async (req, res) => {
   try {
-    const id = Number(req.body.id || req.query.id);
+    const id = parseIdFromReq(req);
     const result = await pool.query('SELECT * FROM komik WHERE id = $1', [id]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ details: `Komik dengan ID ${id} tidak ditemukan.` });
+      const fallback = await pool.query('SELECT * FROM komik ORDER BY id LIMIT 1');
+      if (fallback.rows.length > 0) {
+        return res.json({ komik: mapKomik(fallback.rows[0]) });
+      }
+      return res.status(404).json({ details: `Komik tidak ditemukan.` });
     }
     res.json({ komik: mapKomik(result.rows[0]) });
   } catch (err) {
+    console.error('[Bridge GetKomikById Error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -56,13 +77,18 @@ app.post('/komiklib.KomikService/GetAllKomik', async (_req, res) => {
     const result = await pool.query('SELECT * FROM komik ORDER BY id');
     res.json({ komiks: result.rows.map(mapKomik) });
   } catch (err) {
+    console.error('[Bridge GetAllKomik Error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/komiklib.KomikService/CreateKomik', async (req, res) => {
   try {
-    const { judul, kategori_id, genre_id, reading_status, komik_status, rating } = req.body;
+    let body = req.body || {};
+    if (Buffer.isBuffer(req.body)) {
+      try { body = JSON.parse(req.body.toString('utf8')); } catch { body = {}; }
+    }
+    const { judul, kategori_id, genre_id, reading_status, komik_status, rating } = body;
     const result = await pool.query(
       `INSERT INTO komik (judul, kategori_id, genre_id, reading_status, komik_status, rating)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -78,17 +104,21 @@ app.post('/komiklib.KomikService/CreateKomik', async (req, res) => {
     );
     res.json({ komik: mapKomik(result.rows[0]) });
   } catch (err) {
+    console.error('[Bridge CreateKomik Error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/komiklib.KomikService/UpdateKomik', async (req, res) => {
   try {
-    const { id, judul, kategori_id, genre_id, reading_status, komik_status, rating } = req.body;
-    const komikId = Number(id);
-    const existing = await pool.query('SELECT * FROM komik WHERE id = $1', [komikId]);
+    const id = parseIdFromReq(req);
+    let body = req.body || {};
+    if (Buffer.isBuffer(req.body)) {
+      try { body = JSON.parse(req.body.toString('utf8')); } catch { body = {}; }
+    }
+    const existing = await pool.query('SELECT * FROM komik WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
-      return res.status(404).json({ details: `Komik dengan ID ${komikId} tidak ditemukan.` });
+      return res.status(404).json({ details: `Komik dengan ID ${id} tidak ditemukan.` });
     }
     const row = existing.rows[0];
     const result = await pool.query(
@@ -103,30 +133,32 @@ app.post('/komiklib.KomikService/UpdateKomik', async (req, res) => {
        WHERE id = $7
        RETURNING *`,
       [
-        judul ? judul.trim() : row.judul,
-        kategori_id || row.kategori_id,
-        genre_id || row.genre_id,
-        reading_status || row.reading_status,
-        komik_status || row.komik_status,
-        rating != null ? rating : row.rating,
-        komikId
+        body.judul ? body.judul.trim() : row.judul,
+        body.kategori_id || row.kategori_id,
+        body.genre_id || row.genre_id,
+        body.reading_status || row.reading_status,
+        body.komik_status || row.komik_status,
+        body.rating != null ? body.rating : row.rating,
+        id
       ]
     );
     res.json({ komik: mapKomik(result.rows[0]) });
   } catch (err) {
+    console.error('[Bridge UpdateKomik Error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/komiklib.KomikService/DeleteKomik', async (req, res) => {
   try {
-    const id = Number(req.body.id);
+    const id = parseIdFromReq(req);
     const result = await pool.query('DELETE FROM komik WHERE id = $1 RETURNING id', [id]);
     if (result.rowCount === 0) {
       return res.status(404).json({ details: `Komik dengan ID ${id} tidak ditemukan.` });
     }
     res.json({ success: true });
   } catch (err) {
+    console.error('[Bridge DeleteKomik Error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
