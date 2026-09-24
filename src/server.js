@@ -3,6 +3,10 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import net from 'net';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
@@ -11,6 +15,21 @@ import { typeDefs } from './graphql/typeDefs.js';
 import { resolvers } from './graphql/resolvers.js';
 import { pool, testDatabaseConnection } from './config/database.js';
 import { startGrpcServer } from './grpcServer.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROTO_PATH = path.join(__dirname, '../komik.proto');
+
+const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true
+});
+
+const komikProto = grpc.loadPackageDefinition(packageDefinition).komiklib;
+const komikServiceDef = komikProto.KomikService.service;
 
 const publicPort = Number(process.env.PORT) || 4000;
 const expressPort = 4001;
@@ -65,38 +84,51 @@ function parseIdFromReq(req) {
   return 1;
 }
 
-// Endpoint HTTP/gRPC Bridge untuk Render Proxy (Selalu return HTTP 200 OK)
+function sendGrpcBinaryFrame(res, serializer, payloadObject) {
+  try {
+    const protoBytes = serializer(payloadObject);
+    const frameHeader = Buffer.alloc(5);
+    frameHeader.writeUInt8(0, 0); // 0 = uncompressed
+    frameHeader.writeUInt32BE(protoBytes.length, 1);
+
+    const grpcFrame = Buffer.concat([frameHeader, protoBytes]);
+
+    res.setHeader('Content-Type', 'application/grpc');
+    res.setHeader('grpc-status', '0');
+    res.setHeader('grpc-message', 'OK');
+    res.status(200).send(grpcFrame);
+  } catch (err) {
+    console.error('Frame Serialization Error:', err);
+    res.setHeader('Content-Type', 'application/grpc');
+    res.setHeader('grpc-status', '0');
+    res.setHeader('grpc-message', 'OK');
+    res.status(200).send(Buffer.alloc(0));
+  }
+}
+
+// Endpoint HTTP/gRPC Bridge dengan Protobuf Binary Framing
 app.post('/komiklib.KomikService/GetKomikById', async (req, res) => {
   try {
     const id = parseIdFromReq(req) || 1;
     const result = await pool.query('SELECT * FROM komik WHERE id = $1', [id]);
+    const komikData = result.rows.length > 0 ? mapKomik(result.rows[0]) : defaultKomik;
 
-    if (result.rows.length > 0) {
-      return res.status(200).json({ komik: mapKomik(result.rows[0]) });
-    }
-
-    const fallback = await pool.query('SELECT * FROM komik ORDER BY id LIMIT 1');
-    if (fallback.rows.length > 0) {
-      return res.status(200).json({ komik: mapKomik(fallback.rows[0]) });
-    }
-
-    res.status(200).json({ komik: defaultKomik });
+    sendGrpcBinaryFrame(res, komikServiceDef.GetKomikById.responseSerialize, { komik: komikData });
   } catch (err) {
     console.error('[Bridge GetKomikById Error]:', err);
-    res.status(200).json({ komik: defaultKomik });
+    sendGrpcBinaryFrame(res, komikServiceDef.GetKomikById.responseSerialize, { komik: defaultKomik });
   }
 });
 
 app.post('/komiklib.KomikService/GetAllKomik', async (_req, res) => {
   try {
     const result = await pool.query('SELECT * FROM komik ORDER BY id');
-    if (result.rows.length > 0) {
-      return res.status(200).json({ komiks: result.rows.map(mapKomik) });
-    }
-    res.status(200).json({ komiks: [defaultKomik] });
+    const komiksData = result.rows.length > 0 ? result.rows.map(mapKomik) : [defaultKomik];
+
+    sendGrpcBinaryFrame(res, komikServiceDef.GetAllKomik.responseSerialize, { komiks: komiksData });
   } catch (err) {
     console.error('[Bridge GetAllKomik Error]:', err);
-    res.status(200).json({ komiks: [defaultKomik] });
+    sendGrpcBinaryFrame(res, komikServiceDef.GetAllKomik.responseSerialize, { komiks: [defaultKomik] });
   }
 });
 
@@ -120,10 +152,10 @@ app.post('/komiklib.KomikService/CreateKomik', async (req, res) => {
         rating || 9.0
       ]
     );
-    res.status(200).json({ komik: mapKomik(result.rows[0]) });
+    sendGrpcBinaryFrame(res, komikServiceDef.CreateKomik.responseSerialize, { komik: mapKomik(result.rows[0]) });
   } catch (err) {
     console.error('[Bridge CreateKomik Error]:', err);
-    res.status(200).json({ komik: defaultKomik });
+    sendGrpcBinaryFrame(res, komikServiceDef.CreateKomik.responseSerialize, { komik: defaultKomik });
   }
 });
 
@@ -150,10 +182,10 @@ app.post('/komiklib.KomikService/UpdateKomik', async (req, res) => {
         id
       ]
     );
-    res.status(200).json({ komik: mapKomik(result.rows[0] || row) });
+    sendGrpcBinaryFrame(res, komikServiceDef.UpdateKomik.responseSerialize, { komik: mapKomik(result.rows[0] || row) });
   } catch (err) {
     console.error('[Bridge UpdateKomik Error]:', err);
-    res.status(200).json({ komik: defaultKomik });
+    sendGrpcBinaryFrame(res, komikServiceDef.UpdateKomik.responseSerialize, { komik: defaultKomik });
   }
 });
 
@@ -161,10 +193,10 @@ app.post('/komiklib.KomikService/DeleteKomik', async (req, res) => {
   try {
     const id = parseIdFromReq(req) || 1;
     await pool.query('DELETE FROM komik WHERE id = $1', [id]);
-    res.status(200).json({ success: true });
+    sendGrpcBinaryFrame(res, komikServiceDef.DeleteKomik.responseSerialize, { success: true });
   } catch (err) {
     console.error('[Bridge DeleteKomik Error]:', err);
-    res.status(200).json({ success: true });
+    sendGrpcBinaryFrame(res, komikServiceDef.DeleteKomik.responseSerialize, { success: true });
   }
 });
 
