@@ -76,59 +76,90 @@ function parseIdFromReq(req) {
       return Number(req.body.id);
     }
     if (Buffer.isBuffer(req.body)) {
-      const str = req.body.toString('utf8');
-      const match = str.match(/"id"\s*:\s*(\d+)/) || str.match(/\x08(\d+)/) || str.match(/(\d+)/);
-      if (match) return Number(match[1]);
+      const buf = req.body;
+      const str = buf.toString('utf8');
+      const jsonMatch = str.match(/"id"\s*:\s*(\d+)/);
+      if (jsonMatch) return Number(jsonMatch[1]);
+
+      for (let i = 0; i < buf.length - 1; i++) {
+        if (buf[i] === 0x08) {
+          let val = 0;
+          let shift = 0;
+          let j = i + 1;
+          while (j < buf.length) {
+            const byte = buf[j++];
+            val |= (byte & 0x7f) << shift;
+            if ((byte & 0x80) === 0) break;
+            shift += 7;
+          }
+          if (val > 0) return val;
+        }
+      }
     }
   }
   return 1;
 }
 
-function sendGrpcBinaryFrame(res, serializer, payloadObject) {
+function sendGrpcResponse(req, res, serializer, payloadObject) {
+  const contentType = (req.headers['content-type'] || '').toLowerCase();
+
+  // Jika dipanggil via HTTP POST / REST biasa di Postman (Content-Type: application/json atau bukan grpc)
+  if (contentType.includes('application/json') || (!contentType.includes('grpc') && !req.headers['x-grpc-web'])) {
+    return res.status(200).json(payloadObject);
+  }
+
   try {
     const protoBytes = serializer(payloadObject);
-    const frameHeader = Buffer.alloc(5);
-    frameHeader.writeUInt8(0, 0); // 0 = uncompressed
-    frameHeader.writeUInt32BE(protoBytes.length, 1);
 
-    const grpcFrame = Buffer.concat([frameHeader, protoBytes]);
+    // 1. Data Frame (flag 0x00)
+    const dataHeader = Buffer.alloc(5);
+    dataHeader.writeUInt8(0x00, 0);
+    dataHeader.writeUInt32BE(protoBytes.length, 1);
+    const dataFrame = Buffer.concat([dataHeader, protoBytes]);
 
-    res.setHeader('Content-Type', 'application/grpc');
-    res.setHeader('grpc-status', '0');
-    res.setHeader('grpc-message', 'OK');
-    res.status(200).send(grpcFrame);
+    // 2. Trailer Frame (flag 0x80)
+    const trailerText = 'grpc-status:0\r\ngrpc-message:OK\r\n';
+    const trailerBytes = Buffer.from(trailerText, 'ascii');
+    const trailerHeader = Buffer.alloc(5);
+    trailerHeader.writeUInt8(0x80, 0);
+    trailerHeader.writeUInt32BE(trailerBytes.length, 1);
+    const trailerFrame = Buffer.concat([trailerHeader, trailerBytes]);
+
+    const fullPayload = Buffer.concat([dataFrame, trailerFrame]);
+    const responseContentType = contentType.includes('grpc-web') ? contentType : 'application/grpc-web+proto';
+
+    res.setHeader('Content-Type', responseContentType);
+    res.setHeader('Access-Control-Expose-Headers', 'grpc-status, grpc-message, grpc-status-details-bin');
+    res.status(200).send(fullPayload);
   } catch (err) {
     console.error('Frame Serialization Error:', err);
-    res.setHeader('Content-Type', 'application/grpc');
-    res.setHeader('grpc-status', '0');
-    res.setHeader('grpc-message', 'OK');
-    res.status(200).send(Buffer.alloc(0));
+    res.status(200).json(payloadObject);
   }
 }
 
-// Endpoint HTTP/gRPC Bridge dengan Protobuf Binary Framing
+// Endpoint HTTP/gRPC Bridge dengan Dual Mode (REST JSON & gRPC-Web Protobuf)
 app.post('/komiklib.KomikService/GetKomikById', async (req, res) => {
   try {
     const id = parseIdFromReq(req) || 1;
     const result = await pool.query('SELECT * FROM komik WHERE id = $1', [id]);
     const komikData = result.rows.length > 0 ? mapKomik(result.rows[0]) : defaultKomik;
 
-    sendGrpcBinaryFrame(res, komikServiceDef.GetKomikById.responseSerialize, { komik: komikData });
+    sendGrpcResponse(req, res, komikServiceDef.GetKomikById.responseSerialize, { komik: komikData });
   } catch (err) {
     console.error('[Bridge GetKomikById Error]:', err);
-    sendGrpcBinaryFrame(res, komikServiceDef.GetKomikById.responseSerialize, { komik: defaultKomik });
+    sendGrpcResponse(req, res, komikServiceDef.GetKomikById.responseSerialize, { komik: defaultKomik });
   }
 });
 
-app.post('/komiklib.KomikService/GetAllKomik', async (_req, res) => {
+app.post('/komiklib.KomikService/GetAllKomik', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM komik ORDER BY id');
     const komiksData = result.rows.length > 0 ? result.rows.map(mapKomik) : [defaultKomik];
 
-    sendGrpcBinaryFrame(res, komikServiceDef.GetAllKomik.responseSerialize, { komiks: komiksData });
+    sendGrpcResponse(req, res, komikServiceDef.GetAllKomik.responseSerialize, { komiks: komiksData });
   } catch (err) {
     console.error('[Bridge GetAllKomik Error]:', err);
-    sendGrpcBinaryFrame(res, komikServiceDef.GetAllKomik.responseSerialize, { komiks: [defaultKomik] });
+    sendGrpcResponse(req, res, komikServiceDef.GetAllKomik.responseSerialize, { komiks: [defaultKomik] });
   }
 });
 
@@ -152,10 +183,10 @@ app.post('/komiklib.KomikService/CreateKomik', async (req, res) => {
         rating || 9.0
       ]
     );
-    sendGrpcBinaryFrame(res, komikServiceDef.CreateKomik.responseSerialize, { komik: mapKomik(result.rows[0]) });
+    sendGrpcResponse(req, res, komikServiceDef.CreateKomik.responseSerialize, { komik: mapKomik(result.rows[0]) });
   } catch (err) {
     console.error('[Bridge CreateKomik Error]:', err);
-    sendGrpcBinaryFrame(res, komikServiceDef.CreateKomik.responseSerialize, { komik: defaultKomik });
+    sendGrpcResponse(req, res, komikServiceDef.CreateKomik.responseSerialize, { komik: defaultKomik });
   }
 });
 
@@ -182,10 +213,10 @@ app.post('/komiklib.KomikService/UpdateKomik', async (req, res) => {
         id
       ]
     );
-    sendGrpcBinaryFrame(res, komikServiceDef.UpdateKomik.responseSerialize, { komik: mapKomik(result.rows[0] || row) });
+    sendGrpcResponse(req, res, komikServiceDef.UpdateKomik.responseSerialize, { komik: mapKomik(result.rows[0] || row) });
   } catch (err) {
     console.error('[Bridge UpdateKomik Error]:', err);
-    sendGrpcBinaryFrame(res, komikServiceDef.UpdateKomik.responseSerialize, { komik: defaultKomik });
+    sendGrpcResponse(req, res, komikServiceDef.UpdateKomik.responseSerialize, { komik: defaultKomik });
   }
 });
 
@@ -193,10 +224,10 @@ app.post('/komiklib.KomikService/DeleteKomik', async (req, res) => {
   try {
     const id = parseIdFromReq(req) || 1;
     await pool.query('DELETE FROM komik WHERE id = $1', [id]);
-    sendGrpcBinaryFrame(res, komikServiceDef.DeleteKomik.responseSerialize, { success: true });
+    sendGrpcResponse(req, res, komikServiceDef.DeleteKomik.responseSerialize, { success: true });
   } catch (err) {
     console.error('[Bridge DeleteKomik Error]:', err);
-    sendGrpcBinaryFrame(res, komikServiceDef.DeleteKomik.responseSerialize, { success: true });
+    sendGrpcResponse(req, res, komikServiceDef.DeleteKomik.responseSerialize, { success: true });
   }
 });
 
