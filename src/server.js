@@ -111,26 +111,15 @@ function sendGrpcResponse(req, res, serializer, payloadObject) {
   try {
     const protoBytes = serializer(payloadObject);
 
-    // 1. Data Frame (flag 0x00)
-    const dataHeader = Buffer.alloc(5);
-    dataHeader.writeUInt8(0x00, 0);
-    dataHeader.writeUInt32BE(protoBytes.length, 1);
-    const dataFrame = Buffer.concat([dataHeader, protoBytes]);
+    const frameHeader = Buffer.alloc(5);
+    frameHeader.writeUInt8(0x00, 0);
+    frameHeader.writeUInt32BE(protoBytes.length, 1);
+    const dataFrame = Buffer.concat([frameHeader, protoBytes]);
 
-    // 2. Trailer Frame (flag 0x80)
-    const trailerText = 'grpc-status:0\r\ngrpc-message:OK\r\n';
-    const trailerBytes = Buffer.from(trailerText, 'ascii');
-    const trailerHeader = Buffer.alloc(5);
-    trailerHeader.writeUInt8(0x80, 0);
-    trailerHeader.writeUInt32BE(trailerBytes.length, 1);
-    const trailerFrame = Buffer.concat([trailerHeader, trailerBytes]);
-
-    const fullPayload = Buffer.concat([dataFrame, trailerFrame]);
-    const responseContentType = contentType.includes('grpc-web') ? contentType : 'application/grpc-web+proto';
-
-    res.setHeader('Content-Type', responseContentType);
-    res.setHeader('Access-Control-Expose-Headers', 'grpc-status, grpc-message, grpc-status-details-bin');
-    res.status(200).send(fullPayload);
+    res.setHeader('Content-Type', 'application/grpc');
+    res.setHeader('grpc-status', '0');
+    res.setHeader('grpc-message', 'OK');
+    res.status(200).send(dataFrame);
   } catch (err) {
     console.error('Frame Serialization Error:', err);
     res.status(200).json(payloadObject);
@@ -276,9 +265,7 @@ await startGrpcServer(grpcPort);
 // 3. Jalankan TCP Multiplexer di PORT utama (Render/Local)
 const mainServer = net.createServer((socket) => {
   socket.once('data', (buf) => {
-    const isNativeGrpc = buf.toString('utf8', 0, 3) === 'PRI' ||
-                         buf.includes(Buffer.from('application/grpc')) ||
-                         buf.includes(Buffer.from('grpc-web'));
+    const isNativeGrpc = buf.toString('utf8', 0, 3) === 'PRI';
     const targetPort = isNativeGrpc ? grpcPort : expressPort;
 
     const proxy = net.connect(targetPort, '127.0.0.1', () => {
