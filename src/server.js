@@ -32,8 +32,8 @@ const komikProto = grpc.loadPackageDefinition(packageDefinition).komiklib;
 const komikServiceDef = komikProto.KomikService.service;
 
 const publicPort = Number(process.env.PORT) || 4000;
-const expressPort = 4001;
-const grpcPort = 50051;
+const expressPort = publicPort === 4001 ? 4002 : 4001;
+const grpcPort = publicPort === 50051 ? 50052 : 50051;
 
 const app = express();
 const httpServer = http.createServer(app);
