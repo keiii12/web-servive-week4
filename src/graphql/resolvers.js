@@ -75,6 +75,12 @@ function validateRating(rating) {
   }
 }
 
+function requireAuth(context) {
+  if (!context || !context.user) {
+    throw new Error('Unauthorized: silakan login terlebih dahulu');
+  }
+}
+
 async function getKomikByIdInternal(id) {
   const result = await pool.query(
     'SELECT * FROM komik WHERE id = $1',
@@ -166,7 +172,8 @@ export const resolvers = {
   },
 
   Mutation: {
-    createKategori: async (_, { input }) => {
+    createKategori: async (_, { input }, context) => {
+      requireAuth(context);
       const id = parseId(input.id);
       const nama = input.nama_kategori.trim();
 
@@ -190,7 +197,8 @@ export const resolvers = {
       }
     },
 
-    updateKategori: async (_, { id, input }) => {
+    updateKategori: async (_, { id, input }, context) => {
+      requireAuth(context);
       const kategoriId = parseId(id);
       const nama = input.nama_kategori ? input.nama_kategori.trim() : null;
 
@@ -209,7 +217,8 @@ export const resolvers = {
       return mapKategori(result.rows[0]);
     },
 
-    deleteKategori: async (_, { id }) => {
+    deleteKategori: async (_, { id }, context) => {
+      requireAuth(context);
       const result = await pool.query(
         'DELETE FROM kategori WHERE id = $1 RETURNING id',
         [parseId(id)]
@@ -222,7 +231,8 @@ export const resolvers = {
       return true;
     },
 
-    createGenre: async (_, { input }) => {
+    createGenre: async (_, { input }, context) => {
+      requireAuth(context);
       const id = parseId(input.id);
       const nama = input.nama_genre.trim();
 
@@ -246,7 +256,8 @@ export const resolvers = {
       }
     },
 
-    updateGenre: async (_, { id, input }) => {
+    updateGenre: async (_, { id, input }, context) => {
+      requireAuth(context);
       const genreId = parseId(id);
       const nama = input.nama_genre ? input.nama_genre.trim() : null;
 
@@ -265,7 +276,8 @@ export const resolvers = {
       return mapGenre(result.rows[0]);
     },
 
-    deleteGenre: async (_, { id }) => {
+    deleteGenre: async (_, { id }, context) => {
+      requireAuth(context);
       const result = await pool.query(
         'DELETE FROM genre WHERE id = $1 RETURNING id',
         [parseId(id)]
@@ -278,7 +290,8 @@ export const resolvers = {
       return true;
     },
 
-    createKomik: async (_, { input }) => {
+    createKomik: async (_, { input }, context) => {
+      requireAuth(context);
       validateRating(input.rating);
 
       const kategoriId = input.kategori_id == null
@@ -314,7 +327,8 @@ export const resolvers = {
       }
     },
 
-    updateKomik: async (_, { id, input }) => {
+    updateKomik: async (_, { id, input }, context) => {
+      requireAuth(context);
       const komikId = parseId(id);
       validateRating(input.rating);
 
@@ -381,7 +395,8 @@ export const resolvers = {
       }
     },
 
-    deleteKomik: async (_, { id }) => {
+    deleteKomik: async (_, { id }, context) => {
+      requireAuth(context);
       const result = await pool.query(
         'DELETE FROM komik WHERE id = $1 RETURNING id',
         [parseId(id)]

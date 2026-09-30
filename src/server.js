@@ -15,6 +15,7 @@ import { typeDefs } from './graphql/typeDefs.js';
 import { resolvers } from './graphql/resolvers.js';
 import { pool, testDatabaseConnection } from './config/database.js';
 import { startGrpcServer } from './grpcServer.js';
+import jwt from 'jsonwebtoken';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,6 +137,79 @@ function sendGrpcResponse(req, res, serializer, payloadObject) {
   }
 }
 
+// Endpoint OAuth2 GitHub Login & Callback
+app.get('/auth/login', (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID || 'Ov23li657M8orfBA6sNY';
+  const callbackUrl = process.env.CALLBACK_URL || `${req.protocol}://${req.get('host')}/auth/callback`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=user:email`;
+  res.redirect(githubAuthUrl);
+});
+
+app.get('/auth/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).json({ error: 'Authorization code tidak ditemukan.' });
+  }
+
+  try {
+    const clientId = process.env.GITHUB_CLIENT_ID || 'Ov23li657M8orfBA6sNY';
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET || '785631292951cb283a38d9cc10d79ab12f12dd30';
+
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code
+      })
+    });
+
+    const tokenData = await tokenRes.json();
+    if (tokenData.error) {
+      return res.status(400).json({ error: tokenData.error_description || 'Gagal menukar token dengan GitHub.' });
+    }
+
+    const { access_token } = tokenData;
+
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        'User-Agent': 'Comic-Library-App'
+      }
+    });
+
+    const githubUser = await userRes.json();
+
+    const jwtSecret = process.env.JWT_SECRET || 'super_secret_jwt_key_komik_2026';
+    const token = jwt.sign(
+      {
+        id: githubUser.id,
+        username: githubUser.login,
+        name: githubUser.name
+      },
+      jwtSecret,
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      message: 'Login GitHub Berhasil!',
+      user: {
+        username: githubUser.login,
+        name: githubUser.name || githubUser.login,
+        avatar_url: githubUser.avatar_url
+      },
+      token
+    });
+  } catch (err) {
+    console.error('[OAuth Callback Error]:', err);
+    res.status(500).json({ error: 'Terjadi kesalahan saat memproses autentikasi OAuth.' });
+  }
+});
+
 // Endpoint HTTP/gRPC Bridge dengan Dual Mode (REST JSON & gRPC-Web Protobuf)
 app.post('/komiklib.KomikService/GetKomikById', async (req, res) => {
   try {
@@ -242,8 +316,12 @@ await apolloServer.start();
 app.get('/', (_req, res) => {
   res.json({
     status: 'ok',
-    message: 'Comic Library Web Service is running (GraphQL & gRPC supported).',
-    graphqlEndpoint: '/graphql'
+    message: 'Comic Library Web Service is running (GraphQL, gRPC & GitHub OAuth2 supported).',
+    graphqlEndpoint: '/graphql',
+    authEndpoints: {
+      login: '/auth/login',
+      callback: '/auth/callback'
+    }
   });
 });
 
@@ -260,7 +338,22 @@ app.get('/health', async (_req, res) => {
 app.use(
   '/graphql',
   expressMiddleware(apolloServer, {
-    context: async () => ({ pool })
+    context: async ({ req }) => {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      let user = null;
+
+      if (token) {
+        try {
+          const jwtSecret = process.env.JWT_SECRET || 'super_secret_jwt_key_komik_2026';
+          user = jwt.verify(token, jwtSecret);
+        } catch (err) {
+          console.log('[JWT Verify Warning]:', err.message);
+        }
+      }
+
+      return { pool, user };
+    }
   })
 );
 
