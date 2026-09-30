@@ -37,6 +37,7 @@ const expressPort = publicPort === 4001 ? 4002 : 4001;
 const grpcPort = publicPort === 50051 ? 50052 : 50051;
 
 const app = express();
+app.set('trust proxy', true);
 const httpServer = http.createServer(app);
 
 app.use(cors());
@@ -140,7 +141,9 @@ function sendGrpcResponse(req, res, serializer, payloadObject) {
 // Endpoint OAuth2 GitHub Login & Callback
 app.get('/auth/login', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID || 'Ov23li657M8orfBA6sNY';
-  const callbackUrl = process.env.CALLBACK_URL || `${req.protocol}://${req.get('host')}/auth/callback`;
+  const protocol = req.headers['x-forwarded-proto'] || (req.get('host').includes('localhost') ? 'http' : 'https');
+  const host = req.get('host');
+  const callbackUrl = process.env.CALLBACK_URL || `${protocol}://${host}/auth/callback`;
   const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=user:email`;
   res.redirect(githubAuthUrl);
 });
