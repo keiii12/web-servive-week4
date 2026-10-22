@@ -338,6 +338,21 @@ app.get('/health', async (_req, res) => {
   }
 });
 
+app.get('/komik', async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM komik ORDER BY id LIMIT 10');
+    res.json({
+      service: 'Service A - Comic Catalog (Week 4)',
+      database: 'PostgreSQL Neon',
+      total: result.rows.length,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 app.use(
   '/graphql',
   expressMiddleware(apolloServer, {
