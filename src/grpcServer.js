@@ -1,3 +1,8 @@
+// ===================================================================
+// [LAB 06] Service dengan gRPC & Protocol Buffers
+// Implementasi Server gRPC Node.js yang terhubung ke Database Neon
+// ===================================================================
+
 import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';

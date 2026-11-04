@@ -1,3 +1,8 @@
+// ===================================================================
+// [LAB 04] Konfigurasi Koneksi PostgreSQL Neon menggunakan pg Pool
+// Dipakai bersama oleh GraphQL (Lab 04/05) dan gRPC Server (Lab 06)
+// ===================================================================
+
 import 'dotenv/config';
 import pg from 'pg';
 

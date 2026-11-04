@@ -1,3 +1,11 @@
+// ===================================================================
+// GraphQL Resolvers
+// Menggabungkan implementasi:
+// - [LAB 04] Query & Nested Query (Relasi tabel Neon)
+// - [LAB 05] Resolver Mutation (INSERT, UPDATE COALESCE, DELETE) & Filter Query
+// - [LAB 07] Proteksi Resolver Mutation dengan JWT Context
+// ===================================================================
+
 import { pool } from '../config/database.js';
 
 const readingStatusToDb = {
@@ -75,6 +83,10 @@ function validateRating(rating) {
   }
 }
 
+// ===================================================================
+// [LAB 07 - Langkah 04] Helper Proteksi Autentikasi Resolver
+// Memeriksa user pada context Apollo Server yang didapat dari JWT
+// ===================================================================
 function requireAuth(context) {
   if (!context || !context.user) {
     throw new Error('Unauthorized: silakan login terlebih dahulu');
@@ -96,6 +108,9 @@ let kategoriKomiksResolverCount = 0;
 let genreKomiksResolverCount = 0;
 
 export const resolvers = {
+  // =================================================================
+  // [LAB 04 & LAB 05] Query Resolvers
+  // =================================================================
   Query: {
     kategori: async () => {
       kategoriKomiksResolverCount = 0;
@@ -135,6 +150,7 @@ export const resolvers = {
       return mapGenre(result.rows[0]);
     },
 
+    // [LAB 05 - Langkah 03] Menambahkan argument filter pada Query (kategoriId & genreId)
     komiks: async (_, { kategoriId, genreId }) => {
       komikKategoriResolverCount = 0;
       komikGenreResolverCount = 0;
@@ -171,6 +187,11 @@ export const resolvers = {
     }
   },
 
+  // =================================================================
+  // [LAB 05 - Langkah 02 & LAB 07 - Langkah 04] Mutation Resolvers
+  // Menulis data nyata ke Neon (INSERT, UPDATE COALESCE, DELETE)
+  // serta dilindungi requireAuth(context) dengan JWT OAuth2 GitHub
+  // =================================================================
   Mutation: {
     createKategori: async (_, { input }, context) => {
       requireAuth(context);
@@ -410,6 +431,10 @@ export const resolvers = {
     }
   },
 
+  // =================================================================
+  // [LAB 04 - Langkah 04] Resolver Relasi (Nested Query)
+  // Menghubungkan dua arah: Komik -> Kategori/Genre, Kategori -> Komik, Genre -> Komik
+  // =================================================================
   Komik: {
     kategori: async (parent) => {
       if (parent.kategori_id == null) return null;

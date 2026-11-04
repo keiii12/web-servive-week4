@@ -1,8 +1,13 @@
+// ===================================================================
+// [LAB 06] Service dengan gRPC & Protocol Buffers
+// Definisi Kontrak Schema Protocol Buffers (.proto) untuk Komik Library
+// ===================================================================
+
 syntax = "proto3";
 
 package komiklib;
 
-// Message entitas Komik
+// Message entitas Komik (cocok dengan tabel Neon di database-schema.sql)
 message Komik {
   int32 id = 1;
   string judul = 2;

@@ -1,4 +1,9 @@
-// Skrip pembuktian Rate Limiting (Maks. 20 request / 10 detik)
+// ===================================================================
+// [LAB 08 - Langkah 04] Skrip Pembuktian Rate Limiting Gateway
+// Mengirim 30 request berturut-turut ke API Gateway (port 8080)
+// Hasil yang diharapkan: 20 request berstatus 200, 10 request berstatus 429
+// ===================================================================
+
 (async () => {
   console.log('⚡ Pengujian Rate Limiting pada API Gateway (Maks. 20 request / 10s)');
   console.log('Target URL: http://localhost:8080/service-a/health');
@@ -11,8 +16,8 @@
     try {
       const res = await fetch('http://localhost:8080/service-a/health');
       const label = res.status === 200 ? '200 OK (Request Lolos)' :
-                    res.status === 429 ? '429 Too Many Requests (Ditolak Gateway)' :
-                    `${res.status} ${res.statusText}`;
+        res.status === 429 ? '429 Too Many Requests (Ditolak Gateway)' :
+          `${res.status} ${res.statusText}`;
 
       if (res.status === 200) success++;
       if (res.status === 429) rejected++;

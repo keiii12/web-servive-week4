@@ -1,3 +1,13 @@
+// ===================================================================
+// Unified Web Service Server (src/server.js)
+// Mengintegrasikan:
+// - [LAB 04] Apollo Server & GraphQL Server (PostgreSQL Neon)
+// - [LAB 05] Query & Mutation Lanjutan GraphQL
+// - [LAB 06] gRPC Server & Protocol Buffers Bridge
+// - [LAB 07] GitHub OAuth2 Login, Callback & JWT Verification
+// - [LAB 08] Berperan sebagai Service A (Comic Catalog) di balik Gateway
+// ===================================================================
+
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -21,6 +31,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROTO_PATH = path.join(__dirname, '../komik.proto');
 
+// ===================================================================
+// [LAB 06 - Langkah 03] Muat .proto & Inisialisasi Definisi gRPC
+// ===================================================================
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   keepCase: true,
   longs: String,
@@ -138,7 +151,12 @@ function sendGrpcResponse(req, res, serializer, payloadObject) {
   }
 }
 
-// Endpoint OAuth2 GitHub Login & Callback
+// ===================================================================
+// [LAB 07 - Langkah 02 & 03] Implementasi OAuth2 GitHub
+// 1. Endpoint /auth/login: Mengarahkan pengguna ke GitHub OAuth
+// 2. Endpoint /auth/callback: Menukar auth code dengan access token,
+//    mengambil profil GitHub, lalu menerbitkan JWT sesi
+// ===================================================================
 app.get('/auth/login', (req, res) => {
   const clientId = process.env.GITHUB_CLIENT_ID || 'Ov23li657M8orfBA6sNY';
   const protocol = req.headers['x-forwarded-proto'] || (req.get('host').includes('localhost') ? 'http' : 'https');
@@ -213,7 +231,10 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// Endpoint HTTP/gRPC Bridge dengan Dual Mode (REST JSON & gRPC-Web Protobuf)
+// ===================================================================
+// [LAB 06 - Langkah 04 & 06] gRPC Web / HTTP Bridge (Dual Mode)
+// Memungkinkan pengujian RPC gRPC di Postman & Render publik
+// ===================================================================
 app.post('/komiklib.KomikService/GetKomikById', async (req, res) => {
   try {
     const id = parseIdFromReq(req) || 1;
@@ -307,6 +328,9 @@ app.post('/komiklib.KomikService/DeleteKomik', async (req, res) => {
   }
 });
 
+// ===================================================================
+// [LAB 04 - Langkah 01 & 04] Konfigurasi Apollo GraphQL Server
+// ===================================================================
 const apolloServer = new ApolloServer({
   typeDefs,
   resolvers,
@@ -353,10 +377,14 @@ app.get('/komik', async (_req, res) => {
   }
 });
 
+// ===================================================================
+// [LAB 04] Endpoint GraphQL & [LAB 07 - Langkah 04] Verifikasi JWT lewat Context
+// ===================================================================
 app.use(
   '/graphql',
   expressMiddleware(apolloServer, {
     context: async ({ req }) => {
+      // Ekstraksi header Authorization: Bearer <token>
       const authHeader = req.headers.authorization || '';
       const token = authHeader.replace(/^Bearer\s+/i, '').trim();
       let user = null;
@@ -364,6 +392,7 @@ app.use(
       if (token) {
         try {
           const jwtSecret = process.env.JWT_SECRET || 'super_secret_jwt_key_komik_2026';
+          // Verifikasi token JWT sesi
           user = jwt.verify(token, jwtSecret);
         } catch (err) {
           console.log('[JWT Verify Warning]:', err.message);
@@ -380,6 +409,9 @@ await new Promise((resolve) => {
 });
 console.log(`🚀 Express/GraphQL/gRPC-Bridge ready internally on port ${expressPort}`);
 
+// ===================================================================
+// [LAB 06 - Langkah 01 & 05] Menjalankan Server gRPC & TCP Multiplexer
+// ===================================================================
 // 2. Jalankan gRPC Server di port internal (50051)
 await startGrpcServer(grpcPort);
 

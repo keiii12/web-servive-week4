@@ -1,5 +1,7 @@
--- Comic Library schema reference
--- Jalankan di Neon jika tabel belum tersedia.
+-- ===================================================================
+-- [LAB 04] Skema Database PostgreSQL Neon (Comic Library)
+-- Minimal 2 tabel yang saling berelasi (kategori, genre, dan komik)
+-- ===================================================================
 
 CREATE TABLE kategori (
     id INT PRIMARY KEY,

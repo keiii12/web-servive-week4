@@ -1,3 +1,8 @@
+// ===================================================================
+// [LAB 08 - Langkah 01] Service B: Review & Rating Service
+// Berjalan di port 5000 sebagai service kedua di balik API Gateway
+// ===================================================================
+
 import express from 'express';
 import cors from 'cors';
 
