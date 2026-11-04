@@ -1,11 +1,13 @@
 // ===================================================================
-// [LAB 09 - Langkah 04] Order Service (Microservice Port 3001)
-// Pemilik tunggal data pesanan.
-// TIDAK MEMILIKI data produk; berkomunikasi ke product-service via HTTP
-// dengan timeout 2 detik dan penanganan fault tolerance (503 Service Unavailable).
+// [LAB 09 & LAB 10] Order Service (Microservice Port 3001)
+// - Lab 09: Panggilan HTTP sinkron ke product-service (:3000) untuk reservasi stok.
+// - Lab 10: Bertindak sebagai Publisher/Producer yang menerbitkan event 'order.created'
+//           ke RabbitMQ exchange 'orders' secara asinkron.
 // ===================================================================
 
+import 'dotenv/config';
 import express from 'express';
+import amqp from 'amqplib';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,11 +15,70 @@ const PORT = process.env.PORT || 3001;
 // URL dari product-service (port 3000)
 // Menggunakan 127.0.0.1 untuk kompatibilitas stabil di Windows
 const PRODUCT_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:3000';
+const AMQP_URL = process.env.AMQP_URL || 'amqp://localhost';
 
 app.use(express.json());
 
 // 1. Data Riwayat Pesanan (Disimpan mandiri di order-service)
 const orders = [];
+
+// ===================================================================
+// [LAB 10 - Langkah 03] Konfigurasi Koneksi RabbitMQ Publisher
+// Menghubungkan order-service ke RabbitMQ dan mendeklarasikan exchange 'orders'
+// ===================================================================
+let rabbitChannel = null;
+
+async function connectRabbitMQ() {
+  try {
+    const connection = await amqp.connect(AMQP_URL);
+    connection.on('error', (err) => {
+      console.warn('⚠️ [RabbitMQ Connection Warning]:', err.message);
+    });
+    connection.on('close', () => {
+      console.warn('⚠️ [RabbitMQ Terputus] Mencoba menghubungkan kembali dalam 3 detik...');
+      rabbitChannel = null;
+      setTimeout(connectRabbitMQ, 3000);
+    });
+
+    rabbitChannel = await connection.createChannel();
+    await rabbitChannel.assertExchange('orders', 'fanout', { durable: true });
+    console.log(`🐰 [order-service] Berhasil terhubung ke RabbitMQ di ${AMQP_URL}`);
+  } catch (error) {
+    console.error('❌ RabbitMQ belum tersedia, mencoba lagi dalam 3 detik...');
+    setTimeout(connectRabbitMQ, 3000);
+  }
+}
+
+// Fungsi untuk menerbitkan event 'order.created' ke Exchange RabbitMQ
+function publishOrderCreatedEvent(order) {
+  if (!rabbitChannel) {
+    console.warn('⚠️ [RabbitMQ Warning] Channel belum tersedia, pesan notifikasi gagal diterbitkan.');
+    return;
+  }
+
+  const eventPayload = {
+    eventType: 'order.created',
+    orderId: order.orderId,
+    productId: order.productId,
+    productName: order.productName,
+    qty: order.qty,
+    pricePerUnit: order.pricePerUnit,
+    totalPrice: order.totalPrice,
+    orderDate: order.orderDate
+  };
+
+  const messageBuffer = Buffer.from(JSON.stringify(eventPayload));
+  const messageId = `order-${order.orderId}-${Date.now()}`;
+
+  // Terbitkan pesan ke exchange 'orders' (tipe fanout)
+  rabbitChannel.publish('orders', '', messageBuffer, {
+    persistent: true,
+    contentType: 'application/json',
+    messageId
+  });
+
+  console.log(`📢 [Event Diterbitkan] Event 'order.created' untuk Pesanan #${order.orderId} terkirim ke RabbitMQ (Message ID: ${messageId})`);
+}
 
 // Endpoint: Menampilkan seluruh pesanan
 app.get('/orders', (_req, res) => {
@@ -119,6 +180,13 @@ app.post('/orders', async (req, res) => {
   orders.push(newOrder);
   console.log(`🎉 [Order Berhasil] Pesanan #${newOrder.orderId} dibuat untuk "${newOrder.productName}"`);
 
+  // =================================================================
+  // [LAB 10 - Langkah 03] Terbitkan event ke RabbitMQ secara asinkron!
+  // Perhatikan: Kita TIDAK menunggu (await) email terkirim,
+  // order-service langsung membalas klien dengan status 201 segera.
+  // =================================================================
+  publishOrderCreatedEvent(newOrder);
+
   // Kembalikan status 201 Created kepada klien
   res.status(201).json({
     message: 'Pesanan komik berhasil dibuat!',
@@ -134,5 +202,8 @@ app.use((_req, res) => {
 app.listen(PORT, () => {
   console.log(`🛒 [order-service] Toko Komik berjalan di port ${PORT}`);
   console.log(`   -> Target Product Service: ${PRODUCT_URL}`);
+  
+  // Hubungkan ke RabbitMQ saat server order-service dinyalakan
+  connectRabbitMQ();
 });
 

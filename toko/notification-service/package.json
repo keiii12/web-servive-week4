@@ -1,0 +1,15 @@
+{
+  "name": "comic-notification-service",
+  "version": "1.0.0",
+  "description": "Lab 10 - Notification Microservice (RabbitMQ Consumer)",
+  "type": "module",
+  "main": "notification-service.js",
+  "scripts": {
+    "start": "node notification-service.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "dotenv": "^16.4.7"
+  }
+}
+
