@@ -16,8 +16,8 @@
     try {
       const res = await fetch('http://localhost:8080/service-a/health');
       const label = res.status === 200 ? '200 OK (Request Lolos)' :
-        res.status === 429 ? '429 Too Many Requests (Ditolak Gateway)' :
-          `${res.status} ${res.statusText}`;
+                    res.status === 429 ? '429 Too Many Requests (Ditolak Gateway)' :
+                    `${res.status} ${res.statusText}`;
 
       if (res.status === 200) success++;
       if (res.status === 429) rejected++;
