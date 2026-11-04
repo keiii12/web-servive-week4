@@ -1,0 +1,17 @@
+{
+  "name": "comic-store-gateway",
+  "version": "1.0.0",
+  "description": "Lab 09 - API Gateway for Comic Store Microservices",
+  "type": "module",
+  "main": "gateway.js",
+  "scripts": {
+    "start": "node gateway.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "http-proxy-middleware": "^4.2.0"
+  }
+}
+

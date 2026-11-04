@@ -1,0 +1,14 @@
+{
+  "name": "comic-product-service",
+  "version": "1.0.0",
+  "description": "Lab 09 - Product Microservice (Katalog & Stok Komik)",
+  "type": "module",
+  "main": "product-service.js",
+  "scripts": {
+    "start": "node product-service.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
+

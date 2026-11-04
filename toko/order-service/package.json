@@ -1,0 +1,14 @@
+{
+  "name": "comic-order-service",
+  "version": "1.0.0",
+  "description": "Lab 09 - Order Microservice (Manajemen Pesanan & Transaksi)",
+  "type": "module",
+  "main": "order-service.js",
+  "scripts": {
+    "start": "node order-service.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
+

@@ -1,0 +1,14 @@
+{
+  "name": "comic-store-monolith",
+  "version": "1.0.0",
+  "description": "Lab 09 - Monolith Application (Comic Store)",
+  "type": "module",
+  "main": "monolith.js",
+  "scripts": {
+    "start": "node monolith.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
+
