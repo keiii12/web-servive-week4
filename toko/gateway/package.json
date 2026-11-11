@@ -1,7 +1,7 @@
 {
   "name": "comic-store-gateway",
   "version": "1.0.0",
-  "description": "Lab 09 - API Gateway for Comic Store Microservices",
+  "description": "Lab 09 & Lab 11 - API Gateway for Comic Store Microservices & OpenAPI Docs",
   "type": "module",
   "main": "gateway.js",
   "scripts": {
@@ -11,7 +11,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^8.7.1",
-    "http-proxy-middleware": "^4.2.0"
+    "http-proxy-middleware": "^4.2.0",
+    "swagger-ui-express": "^5.0.1"
   }
 }
 

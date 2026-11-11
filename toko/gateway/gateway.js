@@ -1,13 +1,14 @@
 // ===================================================================
-// [LAB 09 - Langkah 05] API Gateway untuk Sistem Microservices Toko Komik
-// Menyatukan product-service (:3000) dan order-service (:3001) di balik port 8080.
-// Dilengkapi Rate Limiting dan Routing Proxy berbasis Path.
+// [LAB 09 & LAB 11] API Gateway untuk Sistem Microservices Toko Komik
+// - Lab 09: Menyatukan product-service (:3000) dan order-service (:3001)
+// - Lab 11: Menggabungkan dokumentasi OpenAPI kedua service di /docs (:8080/docs)
 // ===================================================================
 
 import 'dotenv/config';
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { rateLimit } from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -29,6 +30,70 @@ app.use(
 
 // PENTING (Lab 08 & 09): JANGAN memasang app.use(express.json()) sebelum middleware proxy!
 // Body parsing cukup dilakukan di service masing-masing.
+
+// ===================================================================
+// [LAB 11 - Langkah 03] Gabungkan Dokumentasi OpenAPI di Gateway
+// Mengambil spesifikasi dari product-service & order-service secara dinamis,
+// lalu menambahkan prefix /product-service dan /order-service pada paths.
+// ===================================================================
+const DOC_SOURCES = [
+  {
+    prefix: '/product-service',
+    url: process.env.PRODUCT_DOC_URL || 'http://127.0.0.1:3000/openapi.json'
+  },
+  {
+    prefix: '/order-service',
+    url: process.env.ORDER_DOC_URL || 'http://127.0.0.1:3001/openapi.json'
+  }
+];
+
+async function buildMergedSpec() {
+  const merged = {
+    openapi: '3.0.3',
+    info: {
+      title: 'Comic Store API (via Gateway)',
+      version: '1.0.0',
+      description: 'Dokumentasi gabungan seluruh microservice Toko Komik di balik satu pintu API Gateway (Lab 11)'
+    },
+    servers: [{ url: '/' }], // "Try it out" langsung memanggil gateway
+    paths: {},
+    components: { schemas: {} }
+  };
+
+  for (const source of DOC_SOURCES) {
+    try {
+      const response = await fetch(source.url, {
+        signal: AbortSignal.timeout(2000)
+      });
+      if (response.ok) {
+        const spec = await response.json();
+        for (const [apiPath, operations] of Object.entries(spec.paths || {})) {
+          merged.paths[source.prefix + apiPath] = operations;
+        }
+        Object.assign(merged.components.schemas, (spec.components || {}).schemas);
+      }
+    } catch (err) {
+      console.warn(`⚠️ [Gateway Docs] Gagal mengambil dokumentasi dari ${source.url}: ${err.message}`);
+    }
+  }
+
+  return merged;
+}
+
+// Endpoint JSON OpenAPI Gabungan
+app.get('/openapi.json', async (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json(await buildMergedSpec());
+});
+
+// Endpoint Swagger UI Gabungan pada API Gateway
+app.use(
+  '/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(null, {
+    swaggerOptions: { url: '/openapi.json' }
+  })
+);
 
 // 2. Info Route pada Root Gateway
 app.get('/', (_req, res) => {

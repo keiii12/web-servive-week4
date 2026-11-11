@@ -1,7 +1,7 @@
 {
   "name": "comic-order-service",
   "version": "1.0.0",
-  "description": "Lab 09 - Order Microservice (Manajemen Pesanan & Transaksi)",
+  "description": "Lab 09, 10 & 11 - Order Microservice (Pesanan, RabbitMQ & OpenAPI Docs)",
   "type": "module",
   "main": "order-service.js",
   "scripts": {
@@ -10,7 +10,8 @@
   "dependencies": {
     "amqplib": "^0.10.4",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }
-

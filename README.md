@@ -350,3 +350,16 @@ Mapping dilakukan di `resolvers.js`.
 - `.env` masuk `.gitignore`.
 - Query PostgreSQL menggunakan parameterized query.
 - Jangan memasukkan credential Neon ke source code atau README.
+
+---
+
+## 10. Microservices Toko Komik (Lab 09, 10 & 11)
+
+Sistem microservices terdistribusi Toko Komik terletak pada direktori [`toko/`](toko/):
+- **Product Service (`:3000`):** Katalog dan stok komik (OpenAPI `@openapi`).
+- **Order Service (`:3001`):** Pembuatan pesanan & publisher RabbitMQ (OpenAPI `@openapi`).
+- **Notification Service:** Consumer antrean RabbitMQ untuk simulasi pengiriman email nota.
+- **API Gateway (`:8080`):** Gateway proxy, rate limiting, dan Swagger UI gabungan di `http://localhost:8080/docs/`.
+- **Spesifikasi OpenAPI:** Tersedia di [`toko/openapi.json`](toko/openapi.json) dan [`openapi.json`](openapi.json).
+- **Laporan Resmi Lab 11:** Lihat dokumen lengkap di [`toko/LAPORAN-LAB-11.md`](toko/LAPORAN-LAB-11.md).
+

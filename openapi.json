@@ -1,0 +1,528 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Comic Store API (via Gateway)",
+    "version": "1.0.0",
+    "description": "Dokumentasi gabungan seluruh microservice Toko Komik di balik satu pintu API Gateway (Lab 11)"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/product-service/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Menampilkan seluruh katalog komik",
+        "responses": {
+          "200": {
+            "description": "Berhasil mengambil daftar komik",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "example": "product-service (Toko Komik)"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "example": 3000
+                    },
+                    "total": {
+                      "type": "integer",
+                      "example": 3
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Product"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/product-service/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Menampilkan detail satu komik berdasarkan ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Berhasil mengambil detail komik",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "example": "product-service"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Komik tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/product-service/products/{id}/reserve": {
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Memesan dan mengurangi stok komik (dipanggil oleh order-service)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReserveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reservasi stok komik berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Reservasi stok komik berhasil!"
+                    },
+                    "reservedQty": {
+                      "type": "integer",
+                      "example": 2
+                    },
+                    "product": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameter jumlah (qty) tidak valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Komik tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stok komik tidak mencukupi untuk memenuhi pesanan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order-service/orders": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Menampilkan seluruh daftar riwayat pesanan",
+        "responses": {
+          "200": {
+            "description": "Berhasil mengambil daftar riwayat pesanan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string",
+                      "example": "order-service (Toko Komik)"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "example": 3001
+                    },
+                    "totalOrders": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Membuat pesanan komik baru",
+        "description": "Memanggil product-service untuk reservasi stok, lalu menyimpan pesanan dan menerbitkan event ke RabbitMQ.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pesanan komik berhasil dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Pesanan komik berhasil dibuat!"
+                    },
+                    "order": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parameter productId atau qty tidak valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Komik yang ingin dipesan tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stok komik tidak mencukupi untuk memenuhi pesanan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Conflict"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Stok komik tidak mencukupi untuk memenuhi pesanan."
+                    },
+                    "sisaStok": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "diminta": {
+                      "type": "integer",
+                      "example": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "product-service tidak dapat dihubungi atau timeout 2 detik",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "Service Unavailable"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "product-service tidak dapat dihubungi atau waktu tunggu habis (timeout 2 detik)."
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order-service/orders/{id}": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Menampilkan detail satu pesanan berdasarkan ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Berhasil mengambil detail pesanan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Order"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Pesanan tidak ditemukan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Omniscient Reader Viewpoint (Edisi Fisik Vol. 1)"
+          },
+          "price": {
+            "type": "integer",
+            "example": 125000
+          },
+          "stock": {
+            "type": "integer",
+            "example": 15
+          },
+          "category": {
+            "type": "string",
+            "example": "Manhwa Korea"
+          }
+        }
+      },
+      "ReserveRequest": {
+        "type": "object",
+        "required": [
+          "qty"
+        ],
+        "properties": {
+          "qty": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 2
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Not Found"
+          },
+          "message": {
+            "type": "string",
+            "example": "Komik dengan ID 1 tidak ditemukan."
+          }
+        }
+      },
+      "ConflictResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Conflict"
+          },
+          "message": {
+            "type": "string",
+            "example": "Stok komik tidak mencukupi untuk memenuhi pesanan."
+          },
+          "sisaStok": {
+            "type": "integer",
+            "example": 1
+          },
+          "diminta": {
+            "type": "integer",
+            "example": 2
+          }
+        }
+      },
+      "OrderRequest": {
+        "type": "object",
+        "required": [
+          "productId",
+          "qty"
+        ],
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "example": 1
+          },
+          "qty": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 2
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "integer",
+            "example": 1
+          },
+          "productId": {
+            "type": "integer",
+            "example": 1
+          },
+          "productName": {
+            "type": "string",
+            "example": "Omniscient Reader Viewpoint (Edisi Fisik Vol. 1)"
+          },
+          "qty": {
+            "type": "integer",
+            "example": 2
+          },
+          "pricePerUnit": {
+            "type": "integer",
+            "example": 125000
+          },
+          "totalPrice": {
+            "type": "integer",
+            "example": 250000
+          },
+          "orderDate": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-11-11T12:00:00.000Z"
+          }
+        }
+      },
+      "OrderError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Bad Request"
+          },
+          "message": {
+            "type": "string",
+            "example": "Parameter productId dan qty wajib diisi."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,13 +1,19 @@
 // ===================================================================
-// [LAB 09 & LAB 10] Order Service (Microservice Port 3001)
+// [LAB 09, LAB 10 & LAB 11] Order Service (Microservice Port 3001)
 // - Lab 09: Panggilan HTTP sinkron ke product-service (:3000) untuk reservasi stok.
 // - Lab 10: Bertindak sebagai Publisher/Producer yang menerbitkan event 'order.created'
 //           ke RabbitMQ exchange 'orders' secara asinkron.
+// - Lab 11: Dokumentasi otomatis OpenAPI/Swagger via JSDoc (@openapi)
 // ===================================================================
 
 import 'dotenv/config';
 import express from 'express';
 import amqp from 'amqplib';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,6 +24,92 @@ const PRODUCT_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:3000';
 const AMQP_URL = process.env.AMQP_URL || 'amqp://localhost';
 
 app.use(express.json());
+
+// ===================================================================
+// [LAB 11 - Langkah 02] Konfigurasi Swagger JSDoc & Swagger UI
+// ===================================================================
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.3',
+    info: {
+      title: 'Comic Order Service API',
+      version: '1.0.0',
+      description: 'Dokumentasi otomatis API pembuatan dan riwayat pesanan komik (Lab 11)'
+    },
+    servers: [
+      {
+        url: 'http://localhost:3001',
+        description: 'Server Order Service Lokal'
+      }
+    ]
+  },
+  apis: ['./order-service.js', __filename.replace(/\\/g, '/')]
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
+app.get('/openapi.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.json(swaggerSpec);
+});
+
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// ===================================================================
+// [LAB 11 - Langkah 02] Skema Komponen OpenAPI (@openapi)
+// ===================================================================
+/**
+ * @openapi
+ * components:
+ *   schemas:
+ *     OrderRequest:
+ *       type: object
+ *       required:
+ *         - productId
+ *         - qty
+ *       properties:
+ *         productId:
+ *           type: integer
+ *           example: 1
+ *         qty:
+ *           type: integer
+ *           minimum: 1
+ *           example: 2
+ *     Order:
+ *       type: object
+ *       properties:
+ *         orderId:
+ *           type: integer
+ *           example: 1
+ *         productId:
+ *           type: integer
+ *           example: 1
+ *         productName:
+ *           type: string
+ *           example: Omniscient Reader Viewpoint (Edisi Fisik Vol. 1)
+ *         qty:
+ *           type: integer
+ *           example: 2
+ *         pricePerUnit:
+ *           type: integer
+ *           example: 125000
+ *         totalPrice:
+ *           type: integer
+ *           example: 250000
+ *         orderDate:
+ *           type: string
+ *           format: date-time
+ *           example: 2026-11-11T12:00:00.000Z
+ *     OrderError:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *           example: Bad Request
+ *         message:
+ *           type: string
+ *           example: Parameter productId dan qty wajib diisi.
+ */
 
 // 1. Data Riwayat Pesanan (Disimpan mandiri di order-service)
 const orders = [];
@@ -81,6 +173,35 @@ function publishOrderCreatedEvent(order) {
 }
 
 // Endpoint: Menampilkan seluruh pesanan
+/**
+ * @openapi
+ * /orders:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     summary: Menampilkan seluruh daftar riwayat pesanan
+ *     responses:
+ *       200:
+ *         description: Berhasil mengambil daftar riwayat pesanan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 service:
+ *                   type: string
+ *                   example: order-service (Toko Komik)
+ *                 port:
+ *                   type: integer
+ *                   example: 3001
+ *                 totalOrders:
+ *                   type: integer
+ *                   example: 1
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Order'
+ */
 app.get('/orders', (_req, res) => {
   res.json({
     service: 'order-service (Toko Komik)',
@@ -91,6 +212,39 @@ app.get('/orders', (_req, res) => {
 });
 
 // Endpoint: Menampilkan detail 1 pesanan berdasarkan orderId
+/**
+ * @openapi
+ * /orders/{id}:
+ *   get:
+ *     tags:
+ *       - Orders
+ *     summary: Menampilkan detail satu pesanan berdasarkan ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Berhasil mengambil detail pesanan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 service:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/Order'
+ *       404:
+ *         description: Pesanan tidak ditemukan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderError'
+ */
 app.get('/orders/:id', (req, res) => {
   const targetId = Number(req.params.id);
   const foundOrder = orders.find((o) => o.orderId === targetId);
@@ -113,6 +267,80 @@ app.get('/orders/:id', (req, res) => {
 // Memanggil endpoint reserve di product-service via HTTP fetch
 // Dilengkapi AbortSignal.timeout(2000) untuk mencegah request menggantung.
 // ===================================================================
+/**
+ * @openapi
+ * /orders:
+ *   post:
+ *     tags:
+ *       - Orders
+ *     summary: Membuat pesanan komik baru
+ *     description: Memanggil product-service untuk reservasi stok, lalu menyimpan pesanan dan menerbitkan event ke RabbitMQ.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/OrderRequest'
+ *     responses:
+ *       201:
+ *         description: Pesanan komik berhasil dibuat
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Pesanan komik berhasil dibuat!
+ *                 order:
+ *                   $ref: '#/components/schemas/Order'
+ *       400:
+ *         description: Parameter productId atau qty tidak valid
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderError'
+ *       404:
+ *         description: Komik yang ingin dipesan tidak ditemukan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderError'
+ *       409:
+ *         description: Stok komik tidak mencukupi untuk memenuhi pesanan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Conflict
+ *                 message:
+ *                   type: string
+ *                   example: Stok komik tidak mencukupi untuk memenuhi pesanan.
+ *                 sisaStok:
+ *                   type: integer
+ *                   example: 1
+ *                 diminta:
+ *                   type: integer
+ *                   example: 2
+ *       503:
+ *         description: product-service tidak dapat dihubungi atau timeout 2 detik
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Service Unavailable
+ *                 message:
+ *                   type: string
+ *                   example: product-service tidak dapat dihubungi atau waktu tunggu habis (timeout 2 detik).
+ *                 details:
+ *                   type: string
+ */
 app.post('/orders', async (req, res) => {
   const { productId, qty } = req.body || {};
 
