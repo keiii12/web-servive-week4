@@ -286,7 +286,8 @@ app.post('/products/:id/reserve', (req, res) => {
   // 3. Validasi ketersediaan stok
   if (product.stock < qty) {
     console.log(`⚠️ [Reserve Gagal] Stok ${product.name} tidak cukup (Sisa: ${product.stock}, Diminta: ${qty})`);
-    return res.status(409).json({
+    // [LAB 12 - Bukti Run Merah di CI]: Sengaja diubah ke 400
+    return res.status(400).json({
       error: 'Conflict',
       message: 'Stok komik tidak mencukupi untuk memenuhi pesanan.',
       sisaStok: product.stock,
