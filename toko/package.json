@@ -1,0 +1,9 @@
+{
+  "name": "toko-test-suite",
+  "version": "1.0.0",
+  "description": "Lab 12 - Automated Testing and Monitoring for Toko Komik Microservices",
+  "scripts": {
+    "test": "node --test tests/api.test.js"
+  }
+}
+

@@ -8,6 +8,7 @@ import express from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { fileURLToPath } from 'url';
+import observability from './observability.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -15,6 +16,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+// [LAB 12 - Langkah 04]: Health check, Metrics, dan Log Terstruktur
+observability(app, 'product-service');
 
 // ===================================================================
 // [LAB 11 - Langkah 01] Konfigurasi Swagger JSDoc & Swagger UI
@@ -147,12 +150,7 @@ const products = [
  *                     $ref: '#/components/schemas/Product'
  */
 app.get('/products', (_req, res) => {
-  res.json({
-    service: 'product-service (Toko Komik)',
-    port: PORT,
-    total: products.length,
-    data: products
-  });
+  res.json(products);
 });
 
 /**
@@ -200,10 +198,7 @@ app.get('/products/:id', (req, res) => {
     });
   }
 
-  res.json({
-    service: 'product-service',
-    data: foundProduct
-  });
+  res.json(foundProduct);
 });
 
 // ===================================================================

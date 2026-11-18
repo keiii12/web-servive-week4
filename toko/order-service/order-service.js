@@ -12,6 +12,7 @@ import amqp from 'amqplib';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { fileURLToPath } from 'url';
+import observability from './observability.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -24,6 +25,8 @@ const PRODUCT_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:3000';
 const AMQP_URL = process.env.AMQP_URL || 'amqp://localhost';
 
 app.use(express.json());
+// [LAB 12 - Langkah 04]: Health check, Metrics, dan Log Terstruktur
+observability(app, 'order-service');
 
 // ===================================================================
 // [LAB 11 - Langkah 02] Konfigurasi Swagger JSDoc & Swagger UI
@@ -203,12 +206,7 @@ function publishOrderCreatedEvent(order) {
  *                     $ref: '#/components/schemas/Order'
  */
 app.get('/orders', (_req, res) => {
-  res.json({
-    service: 'order-service (Toko Komik)',
-    port: PORT,
-    totalOrders: orders.length,
-    data: orders
-  });
+  res.json(orders);
 });
 
 // Endpoint: Menampilkan detail 1 pesanan berdasarkan orderId
@@ -256,10 +254,7 @@ app.get('/orders/:id', (req, res) => {
     });
   }
 
-  res.json({
-    service: 'order-service',
-    data: foundOrder
-  });
+  res.json(foundOrder);
 });
 
 // ===================================================================
@@ -370,7 +365,8 @@ app.post('/orders', async (req, res) => {
     responseFromProductService = await fetch(`${PRODUCT_URL}/products/${parsedProductId}/reserve`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Request-Id': req.id
       },
       body: JSON.stringify({ qty: parsedQty }),
       signal: AbortSignal.timeout(2000) // Timeout 2 detik sesuai spesifikasi Lab 09
@@ -396,12 +392,16 @@ app.post('/orders', async (req, res) => {
   // 4. Jika reservasi sukses (200), catat pesanan dengan snapshot harga saat transaksi
   const reservedProduct = resultData.product;
   const newOrder = {
+    id: orders.length + 1,
     orderId: orders.length + 1,
     productId: reservedProduct.id,
     productName: reservedProduct.name, // Salinan nama komik
     qty: parsedQty,
+    price: reservedProduct.price,
     pricePerUnit: reservedProduct.price, // Salinan harga saat transaksi (snapshot)
+    total: reservedProduct.price * parsedQty,
     totalPrice: reservedProduct.price * parsedQty,
+    createdAt: new Date().toISOString(),
     orderDate: new Date().toISOString()
   };
 
@@ -416,10 +416,7 @@ app.post('/orders', async (req, res) => {
   publishOrderCreatedEvent(newOrder);
 
   // Kembalikan status 201 Created kepada klien
-  res.status(201).json({
-    message: 'Pesanan komik berhasil dibuat!',
-    order: newOrder
-  });
+  res.status(201).json(newOrder);
 });
 
 // Fallback untuk route yang tidak ditemukan

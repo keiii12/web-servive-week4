@@ -1,3 +1,5 @@
+[![CI](https://github.com/keiii12/web-servive-week4/actions/workflows/ci.yml/badge.svg)](https://github.com/keiii12/web-servive-week4/actions/workflows/ci.yml)
+
 # Comic Library GraphQL API
 
 GraphQL API sederhana untuk mengelola koleksi komik menggunakan Node.js, Apollo Server 4, GraphQL, PostgreSQL/Neon, dan Render.

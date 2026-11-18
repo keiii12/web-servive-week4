@@ -6,12 +6,29 @@
 
 import 'dotenv/config';
 import express from 'express';
+import crypto from 'crypto';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { rateLimit } from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 
 const app = express();
 app.set('trust proxy', 1);
+
+// [LAB 12 - Langkah 05]: Request Tracing via X-Request-Id & Health Check
+app.use((req, res, next) => {
+  const id = req.headers['x-request-id'] || crypto.randomUUID();
+  req.headers['x-request-id'] = id;
+  res.setHeader('X-Request-Id', id);
+  next();
+});
+
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'gateway',
+    uptimeSec: Math.floor(process.uptime())
+  });
+});
 
 // 1. Rate Limiting: Maksimal 20 request per 10 detik per alamat IP (Lab 08)
 app.use(

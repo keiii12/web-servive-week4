@@ -1,0 +1,52 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          npm ci --prefix toko/product-service
+          npm ci --prefix toko/order-service
+          npm ci --prefix toko/gateway
+          npm ci --prefix toko
+
+      - name: Start services
+        run: |
+          node toko/product-service/product-service.js > product.log 2>&1 &
+          node toko/order-service/order-service.js > order.log 2>&1 &
+          node toko/gateway/gateway.js > gateway.log 2>&1 &
+
+      - name: Wait until services are ready
+        run: |
+          for url in http://localhost:3000/health http://localhost:3001/health http://localhost:8080/health; do
+            ok=0
+            for i in $(seq 1 30); do
+              if curl -sf "$url" > /dev/null; then
+                ok=1
+                break
+              fi
+              sleep 1
+            done
+            [ "$ok" = 1 ] || { echo "Tidak siap: $url"; exit 1; }
+          done
+
+      - name: Run tests
+        working-directory: toko
+        run: npm test
+
+      - name: Show service logs
+        if: always()
+        run: |
+          for f in product order gateway; do
+            echo "=== Log $f ==="
+            cat "${f}.log" 2>/dev/null || true
+          done
+

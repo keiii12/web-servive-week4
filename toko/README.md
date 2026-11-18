@@ -1,3 +1,5 @@
+[![CI](https://github.com/keiii12/web-servive-week4/actions/workflows/ci.yml/badge.svg)](https://github.com/keiii12/web-servive-week4/actions/workflows/ci.yml)
+
 # Toko Komik Microservices Ecosystem (Lab 09, Lab 10 & Lab 11)
 **Studi Kasus:** Sistem Katalog, Pemesanan, Notifikasi Asinkron, dan Dokumentasi Terpadu (OpenAPI 3.0 / Swagger UI) untuk Toko Komik.
 
